@@ -1,4 +1,4 @@
-module github.com/rahil7376/ZModbus
+module github.com/rahil7376/zmodbus
 
 go 1.21.5
 
