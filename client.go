@@ -165,7 +165,12 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 		return nil, fmt.Errorf("Bad CRC")
 	}
 
-	Values = bytesInt16s(BIG_ENDIAN, Response[3:ResponseLength-2])
+	Response = Response[:len(Response)-2]
 
-	return Values, nil
+	var converted []int16
+	for i := 4; i < len(Response); i = i + 2 {
+		converted = append(converted, int16(bytesToUint16(BIG_ENDIAN, []byte{Response[i], Response[i+1]})))
+	}
+
+	return converted, nil
 }
