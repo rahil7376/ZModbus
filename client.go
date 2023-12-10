@@ -111,7 +111,7 @@ func (mc *ModbusClient) ReadHoldingRegisters(SlaveId uint8, addr uint8, Qty uint
 	return Values, nil
 }
 
-func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values []uint16, err error) {
+func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values []int16, err error) {
 
 	var crc crc
 	crc.init()
@@ -165,7 +165,7 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 		return nil, fmt.Errorf("Bad CRC")
 	}
 
-	Values = bytesToUint16s(BIG_ENDIAN, Response[3:ResponseLength-2])
+	Values = bytesInt16s(BIG_ENDIAN, Response[3:ResponseLength-2])
 
 	return Values, nil
 }

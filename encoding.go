@@ -40,3 +40,11 @@ func bytesToUint16s(endianness Endianness, in []byte) (out []uint16) {
 
 	return
 }
+
+func bytesInt16s(endianness Endianness, in []byte) (out []int16) {
+	for i := 0; i < len(in); i += 2 {
+		out = append(out, int16(bytesToUint16(endianness, in[i:i+2])))
+	}
+
+	return
+}
