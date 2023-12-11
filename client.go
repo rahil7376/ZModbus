@@ -2,6 +2,7 @@ package zmodbus
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
@@ -173,4 +174,79 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 	}
 
 	return converted, nil
+}
+
+func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, values []uint16) error {
+	var crc crc
+	crc.init()
+
+	// Function code 16 (0x10) is used for writing to holding registers
+	functionCode := uint8(0x10)
+
+	// Calculate the number of bytes that hold the register values
+	byteCount := len(values) * 2 // 2 bytes per register
+
+	// Prepare the request
+	request := make([]byte, 7+byteCount)
+	request[0] = slaveID
+	request[1] = functionCode
+	binary.BigEndian.PutUint16(request[2:], startAddr)
+	binary.BigEndian.PutUint16(request[4:], uint16(len(values))) // number of registers
+	request[6] = uint8(byteCount)
+
+	// Add the register values to the request
+	for i, val := range values {
+		binary.BigEndian.PutUint16(request[7+2*i:], val)
+	}
+
+	// Calculate and append CRC
+	crc.add(request[:7+byteCount])
+	request = append(request, crc.value()...)
+
+	// Write request to the serial port
+	_, err := mc.Stream.Write(request)
+	if err != nil {
+		return err
+	}
+
+	// Read and process the response
+	reader := bufio.NewReader(mc.Stream)
+	buffer := make([]byte, 256)
+	var response []byte
+
+	for {
+		n, err := reader.Read(buffer)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return err
+			}
+			return err
+		}
+		response = append(response, buffer[:n]...)
+		if len(response) >= 8 { // Minimum response length
+			break
+		}
+	}
+
+	// Validate response
+	if len(response) < 8 {
+		return fmt.Errorf("invalid response length")
+	}
+
+	// Check for exception response
+	if response[1] == (functionCode + 0x80) {
+		exceptionCode := response[2]
+		return fmt.Errorf("modbus exception %d received", exceptionCode)
+	}
+
+	// Verify response CRC
+	crc.init()
+	crc.add(response[:6]) // Response length minus CRC
+	if !crc.isEqual(response[6], response[7]) {
+		return fmt.Errorf("bad CRC in response")
+	}
+
+	// Additional checks can be performed here, such as verifying the echoed address and register quantity
+
+	return nil
 }
