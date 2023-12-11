@@ -38,7 +38,7 @@ func (mc *ModbusClient) Open() (err error) {
 	defer mc.lock.Unlock()
 
 	mc.Stream, err = serial.Open(&serial.Config{
-		Address:  mc.Conf.URL,
+		Address:  fmt.Sprintf("\\\\.\\%s", mc.Conf.URL),
 		BaudRate: int(mc.Conf.Speed),
 		DataBits: int(mc.Conf.DataBits),
 		Parity:   mc.Conf.Parity,
