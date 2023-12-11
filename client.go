@@ -177,6 +177,7 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 }
 
 func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, values []uint16) error {
+
 	var crc crc
 	crc.init()
 
@@ -200,7 +201,7 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 	}
 
 	// Calculate and append CRC
-	crc.add(request[:7+byteCount])
+	crc.add(request)
 	request = append(request, crc.value()...)
 
 	// Write request to the serial port
@@ -223,7 +224,7 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 			return err
 		}
 		response = append(response, buffer[:n]...)
-		if len(response) >= 8 { // Minimum response length
+		if len(response) >= 8 {
 			break
 		}
 	}
