@@ -252,11 +252,12 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 	return nil
 }
 
-func (mc *ModbusClient) BroadcastSystemTimeToModbus() error {
+func (mc *ModbusClient) BroadcastTime() error {
+
 	// Get the current system time
 	now := time.Now()
 
-	// Extract the individual components
+	// Extract the individual components for the time
 	sec := uint16(now.Second())
 	min := uint16(now.Minute())
 	hour := uint16(now.Hour())
@@ -264,50 +265,85 @@ func (mc *ModbusClient) BroadcastSystemTimeToModbus() error {
 	month := uint16(now.Month())
 	year := uint16(now.Year() - 2000) // Adjust for Modbus, assuming 2 digits (e.g., 2023 becomes 23)
 
-	// Data to be written for time update
-	timeValues := []uint16{sec, min, hour, date, month, year}
-
-	// Initialize CRC calculation
 	var crc crc
 	crc.init()
+	values := []uint16{
+		1,     // Register 42: Set the 1st bit to update the RTC
+		7936,  // Register 43: User-defined value (adjust as necessary)
+		sec,   // Register 44: Seconds
+		min,   // Register 45: Minutes
+		hour,  // Register 46: Hours
+		date,  // Register 47: Date
+		month, // Register 48: Month
+		year,  // Register 49: Year
+	}
 
-	// Prepare to set the 1st bit of register 42
-	configRegAddr := uint16(42)
-	configValue := uint16(0x0001) // Setting the 1st bit to enable RTC update
-	configAddrBytes := uint16ToBytes(BIG_ENDIAN, configRegAddr)
-	configValueBytes := uint16ToBytes(BIG_ENDIAN, configValue)
-	configCmd := []byte{0x00, 0x10, configAddrBytes[0], configAddrBytes[1], 0x00, 0x01, 0x02, configValueBytes[0], configValueBytes[1]}
-	crc.init()
-	crc.add(configCmd)
-	configCmd = append(configCmd, crc.value()...)
+	// Function code 16 (0x10) is used for writing to holding registers
+	functionCode := uint8(0x10)
 
-	// Write configuration command to the Modbus stream to set the bit
-	if _, err := mc.Stream.Write(configCmd); err != nil {
+	byteCount := len(values) * 2 // 2 bytes per register
+
+	// Prepare the request
+	request := make([]byte, 7+byteCount)
+	request[0] = 0
+	request[1] = functionCode
+	binary.BigEndian.PutUint16(request[2:], 42)
+	binary.BigEndian.PutUint16(request[4:], 8) // number of registers
+	request[6] = uint8(byteCount)
+
+	// Add the register values to the request
+	for i, val := range values {
+		binary.BigEndian.PutUint16(request[7+2*i:], val)
+	}
+
+	// Calculate and append CRC
+	crc.add(request)
+	request = append(request, crc.value()...)
+
+	// Write request to the serial port
+	_, err := mc.Stream.Write(request)
+	if err != nil {
 		return err
 	}
 
-	// Prepare the command for Function 16 to set time values
-	startingReg := uint16(44) // Start writing from register 44
-	startingRegBytes := uint16ToBytes(BIG_ENDIAN, startingReg)
-	regQty := uint16(len(timeValues))
-	regQtyBytes := uint16ToBytes(BIG_ENDIAN, regQty)
-	byteCount := byte(regQty * 2)
-	valueBytes := []byte{}
+	// Read and process the response
+	reader := bufio.NewReader(mc.Stream)
+	buffer := make([]byte, 256)
+	var response []byte
 
-	for _, val := range timeValues {
-		valueBytes = append(valueBytes, uint16ToBytes(BIG_ENDIAN, val)...)
+	for {
+		n, err := reader.Read(buffer)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return err
+			}
+			return err
+		}
+		response = append(response, buffer[:n]...)
+		if len(response) >= 8 {
+			break
+		}
 	}
 
-	timeCmd := []byte{0x00, 0x10, startingRegBytes[0], startingRegBytes[1], regQtyBytes[0], regQtyBytes[1], byteCount}
-	timeCmd = append(timeCmd, valueBytes...)
+	// Validate response
+	if len(response) < 8 {
+		return fmt.Errorf("invalid response length")
+	}
+
+	// Check for exception response
+	if response[1] == (functionCode + 0x80) {
+		exceptionCode := response[2]
+		return fmt.Errorf("modbus exception %d received", exceptionCode)
+	}
+
+	// Verify response CRC
 	crc.init()
-	crc.add(timeCmd)
-	timeCmd = append(timeCmd, crc.value()...)
-
-	// Write time command to the Modbus stream
-	if _, err := mc.Stream.Write(timeCmd); err != nil {
-		return err
+	crc.add(response[:6]) // Response length minus CRC
+	if !crc.isEqual(response[6], response[7]) {
+		return fmt.Errorf("bad CRC in response")
 	}
+
+	// Additional checks can be performed here, such as verifying the echoed address and register quantity
 
 	return nil
 }
