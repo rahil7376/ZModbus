@@ -251,3 +251,63 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 
 	return nil
 }
+
+func (mc *ModbusClient) BroadcastSystemTimeToModbus() error {
+	// Get the current system time
+	now := time.Now()
+
+	// Extract the individual components
+	sec := uint16(now.Second())
+	min := uint16(now.Minute())
+	hour := uint16(now.Hour())
+	date := uint16(now.Day())
+	month := uint16(now.Month())
+	year := uint16(now.Year() - 2000) // Adjust for Modbus, assuming 2 digits (e.g., 2023 becomes 23)
+
+	// Data to be written for time update
+	timeValues := []uint16{sec, min, hour, date, month, year}
+
+	// Initialize CRC calculation
+	var crc crc
+	crc.init()
+
+	// Prepare to set the 1st bit of register 42
+	configRegAddr := uint16(42)
+	configValue := uint16(0x0001) // Setting the 1st bit to enable RTC update
+	configAddrBytes := uint16ToBytes(BIG_ENDIAN, configRegAddr)
+	configValueBytes := uint16ToBytes(BIG_ENDIAN, configValue)
+	configCmd := []byte{0x00, 0x10, configAddrBytes[0], configAddrBytes[1], 0x00, 0x01, 0x02, configValueBytes[0], configValueBytes[1]}
+	crc.init()
+	crc.add(configCmd)
+	configCmd = append(configCmd, crc.value()...)
+
+	// Write configuration command to the Modbus stream to set the bit
+	if _, err := mc.Stream.Write(configCmd); err != nil {
+		return err
+	}
+
+	// Prepare the command for Function 16 to set time values
+	startingReg := uint16(44) // Start writing from register 44
+	startingRegBytes := uint16ToBytes(BIG_ENDIAN, startingReg)
+	regQty := uint16(len(timeValues))
+	regQtyBytes := uint16ToBytes(BIG_ENDIAN, regQty)
+	byteCount := byte(regQty * 2)
+	valueBytes := []byte{}
+
+	for _, val := range timeValues {
+		valueBytes = append(valueBytes, uint16ToBytes(BIG_ENDIAN, val)...)
+	}
+
+	timeCmd := []byte{0x00, 0x10, startingRegBytes[0], startingRegBytes[1], regQtyBytes[0], regQtyBytes[1], byteCount}
+	timeCmd = append(timeCmd, valueBytes...)
+	crc.init()
+	crc.add(timeCmd)
+	timeCmd = append(timeCmd, crc.value()...)
+
+	// Write time command to the Modbus stream
+	if _, err := mc.Stream.Write(timeCmd); err != nil {
+		return err
+	}
+
+	return nil
+}
