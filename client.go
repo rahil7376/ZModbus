@@ -53,8 +53,7 @@ func (mc *ModbusClient) Close() (err error) {
 }
 
 func (mc *ModbusClient) ReadHoldingRegisters(SlaveId uint8, addr uint8, Qty uint8) (Values []uint16, err error) {
-	mc.lock.Lock()
-	defer mc.lock.Unlock()
+
 	var crc crc
 	crc.init()
 	AddrHighLow := uint16ToBytes(BIG_ENDIAN, uint16(addr))
@@ -114,8 +113,7 @@ func (mc *ModbusClient) ReadHoldingRegisters(SlaveId uint8, addr uint8, Qty uint
 }
 
 func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values []int16, err error) {
-	mc.lock.Lock()
-	defer mc.lock.Unlock()
+
 	var crc crc
 	crc.init()
 	LogIndexHighLow := uint16ToBytes(BIG_ENDIAN, uint16(LogIndex))
@@ -179,8 +177,7 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 }
 
 func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, values []uint16) error {
-	mc.lock.Lock()
-	defer mc.lock.Unlock()
+
 	var crc crc
 	crc.init()
 
@@ -256,8 +253,7 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 }
 
 func (mc *ModbusClient) BroadcastTime() error {
-	mc.lock.Lock()
-	defer mc.lock.Unlock()
+
 	// Get the current system time
 	now := time.Now()
 
