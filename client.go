@@ -104,7 +104,7 @@ func (mc *ModbusClient) ReadHoldingRegisters(SlaveId uint8, addr uint8, Qty uint
 
 	// compare CRC values
 	if !crc.isEqual(Response[ResponseLength-2], Response[ResponseLength-1]) {
-		return nil, fmt.Errorf("Bad CRC")
+		return nil, fmt.Errorf("bad CRC")
 	}
 
 	Values = bytesToUint16s(BIG_ENDIAN, Response[3:ResponseLength-2])
@@ -163,7 +163,7 @@ func (mc *ModbusClient) ReadLogsFromMemory(SlaveId uint8, LogIndex int) (Values 
 
 	// compare CRC values
 	if !crc.isEqual(Response[ResponseLength-2], Response[ResponseLength-1]) {
-		return nil, fmt.Errorf("Bad CRC")
+		return nil, fmt.Errorf("bad CRC")
 	}
 
 	Response = Response[:len(Response)-2]
@@ -252,7 +252,7 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 	return nil
 }
 
-func (mc *ModbusClient) BroadcastTime() error {
+func (mc *ModbusClient) BroadcastTime(Register43Value uint16) error {
 
 	// Get the current system time
 	now := time.Now()
@@ -268,14 +268,14 @@ func (mc *ModbusClient) BroadcastTime() error {
 	var crc crc
 	crc.init()
 	values := []uint16{
-		1,     // Register 42: Set the 1st bit to update the RTC
-		7936,  // Register 43: User-defined value (adjust as necessary)
-		sec,   // Register 44: Seconds
-		min,   // Register 45: Minutes
-		hour,  // Register 46: Hours
-		date,  // Register 47: Date
-		month, // Register 48: Month
-		year,  // Register 49: Year
+		1,               // Register 42: Set the 1st bit to update the RTC
+		Register43Value, // Register 43: User-defined value (adjust as necessary)
+		sec,             // Register 44: Seconds
+		min,             // Register 45: Minutes
+		hour,            // Register 46: Hours
+		date,            // Register 47: Date
+		month,           // Register 48: Month
+		year,            // Register 49: Year
 	}
 
 	// Function code 16 (0x10) is used for writing to holding registers
@@ -336,10 +336,10 @@ func (mc *ModbusClient) BroadcastTime() error {
 		return fmt.Errorf("modbus exception %d received", exceptionCode)
 	}
 
-	// Verify response CRC
+	// Verify response CRC using provided CRC implementation
 	crc.init()
-	crc.add(response[:6]) // Response length minus CRC
-	if !crc.isEqual(response[6], response[7]) {
+	crc.add(response[:len(response)-2]) // Response length minus CRC
+	if !crc.isEqual(response[len(response)-2], response[len(response)-1]) {
 		return fmt.Errorf("bad CRC in response")
 	}
 
