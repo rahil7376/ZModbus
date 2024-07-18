@@ -252,7 +252,103 @@ func (mc *ModbusClient) WriteHoldingRegisters(slaveID uint8, startAddr uint16, v
 	return nil
 }
 
-func (mc *ModbusClient) BroadcastTime(Register43Value uint16) error {
+// func (mc *ModbusClient) BroadcastTime(Register43Value uint16) error {
+
+// 	// Get the current system time
+// 	now := time.Now()
+
+// 	// Extract the individual components for the time
+// 	sec := uint16(now.Second())
+// 	min := uint16(now.Minute())
+// 	hour := uint16(now.Hour())
+// 	date := uint16(now.Day())
+// 	month := uint16(now.Month())
+// 	year := uint16(now.Year() - 2000) // Adjust for Modbus, assuming 2 digits (e.g., 2023 becomes 23)
+
+// 	var crc crc
+// 	crc.init()
+// 	values := []uint16{
+// 		1,               // Register 42: Set the 1st bit to update the RTC
+// 		Register43Value, // Register 43: User-defined value (adjust as necessary)
+// 		sec,             // Register 44: Seconds
+// 		min,             // Register 45: Minutes
+// 		hour,            // Register 46: Hours
+// 		date,            // Register 47: Date
+// 		month,           // Register 48: Month
+// 		year,            // Register 49: Year
+// 	}
+
+// 	// Function code 16 (0x10) is used for writing to holding registers
+// 	functionCode := uint8(0x10)
+
+// 	byteCount := len(values) * 2 // 2 bytes per register
+
+// 	// Prepare the request
+// 	request := make([]byte, 7+byteCount)
+// 	request[0] = 0
+// 	request[1] = functionCode
+// 	binary.BigEndian.PutUint16(request[2:], 42)
+// 	binary.BigEndian.PutUint16(request[4:], 8) // number of registers
+// 	request[6] = uint8(byteCount)
+
+// 	// Add the register values to the request
+// 	for i, val := range values {
+// 		binary.BigEndian.PutUint16(request[7+2*i:], val)
+// 	}
+
+// 	// Calculate and append CRC
+// 	crc.add(request)
+// 	request = append(request, crc.value()...)
+
+// 	// Write request to the serial port
+// 	_, err := mc.Stream.Write(request)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Read and process the response
+// 	reader := bufio.NewReader(mc.Stream)
+// 	buffer := make([]byte, 256)
+// 	var response []byte
+
+// 	for {
+// 		n, err := reader.Read(buffer)
+// 		if err != nil {
+// 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+// 				return err
+// 			}
+// 			return err
+// 		}
+// 		response = append(response, buffer[:n]...)
+// 		if len(response) >= 8 {
+// 			break
+// 		}
+// 	}
+
+// 	// Validate response
+// 	if len(response) < 8 {
+// 		return fmt.Errorf("invalid response length")
+// 	}
+
+// 	// Check for exception response
+// 	if response[1] == (functionCode + 0x80) {
+// 		exceptionCode := response[2]
+// 		return fmt.Errorf("modbus exception %d received", exceptionCode)
+// 	}
+
+// 	// Verify response CRC using provided CRC implementation
+// 	crc.init()
+// 	crc.add(response[:len(response)-2]) // Response length minus CRC
+// 	if !crc.isEqual(response[len(response)-2], response[len(response)-1]) {
+// 		return fmt.Errorf("bad CRC in response")
+// 	}
+
+// 	// Additional checks can be performed here, such as verifying the echoed address and register quantity
+
+// 	return nil
+// }
+
+func (mc *ModbusClient) BroadcastTime() error {
 
 	// Get the current system time
 	now := time.Now()
@@ -268,14 +364,13 @@ func (mc *ModbusClient) BroadcastTime(Register43Value uint16) error {
 	var crc crc
 	crc.init()
 	values := []uint16{
-		1,               // Register 42: Set the 1st bit to update the RTC
-		Register43Value, // Register 43: User-defined value (adjust as necessary)
-		sec,             // Register 44: Seconds
-		min,             // Register 45: Minutes
-		hour,            // Register 46: Hours
-		date,            // Register 47: Date
-		month,           // Register 48: Month
-		year,            // Register 49: Year
+		1,     // Register 42: Set the 1st bit to update the RTC
+		sec,   // Register 43: Seconds
+		min,   // Register 44: Minutes
+		hour,  // Register 45: Hours
+		date,  // Register 46: Date
+		month, // Register 47: Month
+		year,  // Register 48: Year
 	}
 
 	// Function code 16 (0x10) is used for writing to holding registers
@@ -287,8 +382,8 @@ func (mc *ModbusClient) BroadcastTime(Register43Value uint16) error {
 	request := make([]byte, 7+byteCount)
 	request[0] = 0
 	request[1] = functionCode
-	binary.BigEndian.PutUint16(request[2:], 42)
-	binary.BigEndian.PutUint16(request[4:], 8) // number of registers
+	binary.BigEndian.PutUint16(request[2:], 43)
+	binary.BigEndian.PutUint16(request[4:], 7) // number of registers
 	request[6] = uint8(byteCount)
 
 	// Add the register values to the request
